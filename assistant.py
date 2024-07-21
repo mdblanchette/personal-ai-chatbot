@@ -1,6 +1,6 @@
 from groq import Groq
 from PIL import ImageGrab, Image
-from openai import OpenAI
+import azure.cognitiveservices.speech as speechsdk
 import google.generativeai as genai
 import pyperclip
 import cv2
@@ -13,12 +13,17 @@ load_dotenv()
 # Load API keys
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+AZURE_SPEECH_KEY = os.getenv('AZURE_SPEECH_KEY')
+AZURE_SERVICE_REGION = os.getenv('AZURE_SERVICE_REGION')
 
 groq_client = Groq(
     api_key=GROQ_API_KEY)
 genai.configure(api_key=GEMINI_API_KEY)
-openai_client = OpenAI(
-    api_key="")
+speech_config = speechsdk.SpeechConfig(
+    subscription=AZURE_SPEECH_KEY,
+    region=AZURE_SERVICE_REGION,
+
+)
 web_cam = cv2.VideoCapture(1)
 
 sys_msg = (
@@ -136,6 +141,14 @@ def vision_prompt(prompt, photo_path):
     return response.text
 
 
+def speak(text):
+    # Thai speaker for now (Add functionality to change speakers later)
+    speech_config.speech_synthesis_voice_name = "th-TH-PremwadeeNeural"
+    speech_synthesizer = speechsdk.SpeechSynthesizer(
+        speech_config=speech_config)
+    result = speech_synthesizer.speak_text_async(text).get()
+
+
 while True:
     prompt = input('USER: ')
     call = function_call(prompt)
@@ -159,4 +172,4 @@ while True:
 
     response = groq_prompt(prompt=prompt, img_context=visual_context)
     print(f'AI: {response}')
-    # Add voice output here
+    speak(response)
