@@ -1,9 +1,5 @@
-from groq import Groq
-from PIL import ImageGrab, Image
+from openai import AzureOpenAI
 import azure.cognitiveservices.speech as speechsdk
-import google.generativeai as genai
-import pyperclip
-import cv2
 import os
 from dotenv import load_dotenv
 
@@ -11,110 +7,59 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Load API keys
-GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+AZURE_OPENAI_API_KEY = os.getenv('AZURE_OPENAI_API_KEY')
+AZURE_ENDPOINT = os.getenv('AZURE_ENDPOINT')
 AZURE_SPEECH_KEY = os.getenv('AZURE_SPEECH_KEY')
 AZURE_SERVICE_REGION = os.getenv('AZURE_SERVICE_REGION')
 
-groq_client = Groq(
-    api_key=GROQ_API_KEY)
-genai.configure(api_key=GEMINI_API_KEY)
+client = AzureOpenAI(
+    azure_endpoint=AZURE_ENDPOINT,
+    api_version="2023-05-15",
+    api_key=AZURE_OPENAI_API_KEY
+)
+
 speech_config = speechsdk.SpeechConfig(
     subscription=AZURE_SPEECH_KEY,
     region=AZURE_SERVICE_REGION,
-
 )
-web_cam = cv2.VideoCapture(1)
-
 sys_msg = (
-    'You are a professional language tutor that is native in Thai, Mandarin, and Cantonese. Your purpose is to facilitate engaging conversations with your user '
-    'and provide language learning opportunities. Whenever your user indicates a specific language they want to learn or practice, you will respond using only that language unless specified otherwise. '
-    'Do not provide any translations or explanations. Your resposne must only use the language the user has requested. '
+    'You are a highly skilled polyglot language tutor, fluent in all languages. Your purpose is to facilitate engaging, one-on-one conversations '
+    'with the user in their chosen language, providing comprehensive language learning opportunities. Key points:\n'
+    '1. Respond exclusively in the language specified by the user, without using English, pinyin, or romanization, unless explicitly requested.\n'
+    '2. Engage in a turn-based dialogue. Provide one response at a time and always wait for the user\'s input before continuing.\n'
+    '3. Never generate or assume the user\'s responses. Only respond to what the user actually says.\n'
+    '4. Adapt your language use to the user\'s proficiency level, gradually increasing complexity as appropriate.\n'
+    '5. Ask questions, make comments, or continue the conversation naturally based on the user\'s input.\n'
+    '6. Provide gentle error correction when appropriate, explaining mistakes briefly in the target language.\n'
+    '7. If the user struggles, offer help or rephrase in simpler terms, always in the target language.\n'
+    '8. Be prepared to discuss any topic or play any conversational role the user requests.\n'
+    '9. Incorporate relevant cultural context, idiomatic expressions, and colloquialisms to enhance learning.\n'
+    '10. Emulate speech patterns and dialects appropriate for the specified language and region, if indicated.\n'
+    '11. Encourage the user to express themselves in the target language, even if they make mistakes.\n'
+    '12. Be prepared to explain grammar points or vocabulary if asked.\n'
+    '13. Maintain a supportive and patient demeanor throughout the conversation, fostering a positive learning environment.\n'
+    '14. If the user speaks to you in English, you may use English to respond, but go back to the target language in the next turn.\n'
+    'Remember, your role is to converse naturally with the user, one turn at a time, in the specified language, while providing a rich '
+    'language learning experience.'
 )
 
 convo = [{'role': 'system', 'content': sys_msg}]
 
-generation_config = {
-    'temperature': 0.7,
-    'top_p': 1,
-    'top_k': 1,
-    'max_output_tokens': 2048
-}
 
-model = genai.GenerativeModel('gemini-1.5-flash-latest',
-                              generation_config=generation_config)
-
-
-def groq_prompt(prompt, img_context):
-    if img_context:
-        prompt = f'USER PROMPT: {prompt}\n\n    IMAGE CONTEXT: {img_context}'
+def get_response(prompt):
     convo.append({'role': 'user', 'content': prompt})
-    chat_completion = groq_client.chat.completions.create(
-        messages=convo, model='llama3-70b-8192')
-    response = chat_completion.choices[0].message
-    convo.append(response)
-
-    return response.content
-
-
-def function_call(prompt):
-    sys_msg = (
-        'You are an AI function calling model. You will determine whether extracting the users clipboard content, '
-        'taking a screenshot, capturing the webcam or calling no functions is best for a voice assistant to respond '
-        'to the users prompt. The webcam can be assumed to be a normal laptop webcam facing the user. You will '
-        'respond with only one selection from this list: ["extract clipboard", "take screenshot", "capture webcam", "None"] \n'
-        'Do not respond with anything but the most logical selection from that list with no explanations. Format the '
-        'function call name exactly as I listed. '
-    )
-
-    function_convo = [{'role': 'system', 'content': sys_msg},
-                      {'role': 'user', 'content': prompt}]
-
-    convo = [{'role': 'user', 'content': prompt}]
-    chat_completion = groq_client.chat.completions.create(
-        messages=function_convo, model='llama3-70b-8192')
-    response = chat_completion.choices[0].message
-
-    return response.content
-
-
-def take_screenshot():
-    path = 'screenshot.jpg'
-    screenshot = ImageGrab.grab()
-    rgb_screenshot = screenshot.convert('RGB')
-    rgb_screenshot.save(path, quality=15)
-
-
-def web_cam_capture():
-    if not web_cam.isOpened():
-        print('Error: Could not open webcam')
-        exit()
-
-    path = 'webcam.jpg'
-    ret, frame = web_cam.read()
-    cv2.imwrite(path, frame)
-
-
-def get_clipboard_text():
-    clipboard_content = pyperclip.paste()
-    if isinstance(clipboard_content, str):
-        return clipboard_content
-    else:
-        print('No clipboard text to copy')
+    try:
+        response = client.chat.completions.create(
+            model='gpt-4o',  # Use your specific deployment name
+            temperature=0.7,
+            messages=convo
+        )
+        content = response.choices[0].message.content
+        convo.append({'role': 'assistant', 'content': content})
+        return content
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
         return None
-
-
-def vision_prompt(prompt, photo_path):
-    img = Image.open(photo_path)
-    prompt = (
-        'You are the vision analysis AI that provides semantic meaning from images to provide context '
-        'to send to another AI that will create a response to the user. Do not respond as the AI assistant '
-        'to the user. Instead take the user prompt input and try to extract all meaning from the photo '
-        'relevant to the user prompt. Then generate as much objective data about the image for the AI '
-        f'assistant who will respond to the user. \nUSER PROMPT: {prompt}'
-    )
-    response = model.generate_content([prompt, img])
-    return response.text
 
 
 def speak(text):
@@ -122,30 +67,26 @@ def speak(text):
     speech_config.speech_synthesis_voice_name = "th-TH-PremwadeeNeural"
     speech_synthesizer = speechsdk.SpeechSynthesizer(
         speech_config=speech_config)
-    result = speech_synthesizer.speak_text_async(text).get()
+    try:
+        result = speech_synthesizer.speak_text_async(text).get()
+        if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+            print("Speech synthesized for text [{}]".format(text))
+        elif result.reason == speechsdk.ResultReason.Canceled:
+            cancellation_details = result.cancellation_details
+            print("Speech synthesis canceled: {}".format(
+                cancellation_details.reason))
+            if cancellation_details.reason == speechsdk.CancellationReason.Error:
+                print("Error details: {}".format(
+                    cancellation_details.error_details))
+    except Exception as e:
+        print(f"An error occurred during speech synthesis: {str(e)}")
 
 
 while True:
     prompt = input('USER: ')
-    call = function_call(prompt)
-
-    if 'take screenshot' in call:
-        print('SYSTEM: Taking screenshot...')
-        take_screenshot()
-        visual_context = vision_prompt(
-            prompt=prompt, photo_path='screenshot.jpg')
-    elif 'capture webcam' in call:
-        print('SYSTEM: Capturing webcam...')
-        web_cam_capture()
-        visual_context = vision_prompt(prompt=prompt, photo_path='webcam.jpg')
-    elif 'extract clipboard' in call:
-        print('SYSTEM: Extracting clipboard text...')
-        paste = get_clipboard_text()
-        prompt = f'{prompt}\n\n CLIPBOARD CONTENT: {paste}'
-        visual_context = None
+    response = get_response(prompt)
+    if response:
+        print(f'AI: {response}')
+        # speak(response)
     else:
-        visual_context = None
-
-    response = groq_prompt(prompt=prompt, img_context=visual_context)
-    print(f'AI: {response}')
-    speak(response)
+        print("Failed to get a response from the AI.")
