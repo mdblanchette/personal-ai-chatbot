@@ -12,6 +12,15 @@ AZURE_ENDPOINT = os.getenv('AZURE_ENDPOINT')
 AZURE_SPEECH_KEY = os.getenv('AZURE_SPEECH_KEY')
 AZURE_SERVICE_REGION = os.getenv('AZURE_SERVICE_REGION')
 
+LANGUAGE_VOICE_MAPPING = {
+    'english': 'en-US-AvaMultilingualNeural',
+    'thai': 'th-TH-PremwadeeNeural',
+    'mandarin': 'zh-CN-XiaoxiaoNeural',
+    'cantonese': 'yue-CN-XiaoMinNeural',
+}
+
+current_language = 'english'  # Default language
+
 client = AzureOpenAI(
     azure_endpoint=AZURE_ENDPOINT,
     api_version="2023-05-15",
@@ -22,6 +31,7 @@ speech_config = speechsdk.SpeechConfig(
     subscription=AZURE_SPEECH_KEY,
     region=AZURE_SERVICE_REGION,
 )
+
 sys_msg = (
     'You are a highly skilled polyglot language tutor, fluent in all languages. Your purpose is to facilitate engaging, one-on-one conversations '
     'with the user in their chosen language, providing comprehensive language learning opportunities. Key points:\n'
@@ -39,6 +49,7 @@ sys_msg = (
     '12. Be prepared to explain grammar points or vocabulary if asked.\n'
     '13. Maintain a supportive and patient demeanor throughout the conversation, fostering a positive learning environment.\n'
     '14. If the user speaks to you in English, you may use English to respond, but go back to the target language in the next turn.\n'
+    '15. Your default language at the beginning of the conversation is English. The user may request a different language at any time.\n'
     'Remember, your role is to converse naturally with the user, one turn at a time, in the specified language, while providing a rich '
     'language learning experience.'
 )
@@ -62,9 +73,14 @@ def get_response(prompt):
         return None
 
 
-def speak(text):
-    # Thai speaker for now (Add functionality to change speakers later)
-    speech_config.speech_synthesis_voice_name = "th-TH-PremwadeeNeural"
+def speak(text, language):
+    if language.lower() in LANGUAGE_VOICE_MAPPING:
+        speech_config.speech_synthesis_voice_name = LANGUAGE_VOICE_MAPPING[language.lower(
+        )]
+    else:
+        print(
+            f"Warning: No voice model found for {language}. Using default voice.")
+
     speech_synthesizer = speechsdk.SpeechSynthesizer(
         speech_config=speech_config)
     try:
@@ -81,12 +97,41 @@ def speak(text):
     except Exception as e:
         print(f"An error occurred during speech synthesis: {str(e)}")
 
+# def get_language(prompt):
+#     sys_msg = (
+#         'You are an AI language selection model. You will determine which language the user would like to use for communication. '
+#         'You will respond with only one selection from this list: ["english", "thai", "mandarin", "cantonese"] \n'
+#         'Do not respond with anything but the most logical selection from that list with no explanations. Format the '
+#         'language name exactly as I listed. '
+#     )
+#     lang_convo = [{'role': 'system', 'content': sys_msg},
+#                       {'role': 'user', 'content': prompt}]
+
+#     convo = [{'role': 'user', 'content': prompt}]
+#     chat_completion = groq_client.chat.completions.create(
+#         messages=function_convo, model='llama3-70b-8192')
+#     response = chat_completion.choices[0].message
+
+#     return response.content
+
 
 while True:
     prompt = input('USER: ')
+
+    # Check if the user wants to change the language
+    if prompt.lower().startswith('change language to '):
+        new_language = prompt[19:].strip().lower()
+        if new_language in LANGUAGE_VOICE_MAPPING:
+            current_language = new_language
+            print(f"Language changed to {current_language}")
+        else:
+            print(
+                f"Sorry, {new_language} is not supported. Please try another language.")
+            continue
+
     response = get_response(prompt)
     if response:
         print(f'AI: {response}')
-        # speak(response)
+        speak(response, current_language)
     else:
         print("Failed to get a response from the AI.")
