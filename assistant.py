@@ -1,5 +1,7 @@
 from openai import AzureOpenAI
 import azure.cognitiveservices.speech as speechsdk
+import speech_recognition as sr
+import pyttsx3
 import os
 from dotenv import load_dotenv
 
@@ -20,6 +22,8 @@ LANGUAGE_VOICE_MAPPING = {
 }
 
 current_language = 'english'  # Default language
+
+recognizer = sr.Recognizer()
 
 client = AzureOpenAI(
     azure_endpoint=AZURE_ENDPOINT,
@@ -96,23 +100,6 @@ def speak(text, language):
                     cancellation_details.error_details))
     except Exception as e:
         print(f"An error occurred during speech synthesis: {str(e)}")
-
-# def get_language(prompt):
-#     sys_msg = (
-#         'You are an AI language selection model. You will determine which language the user would like to use for communication. '
-#         'You will respond with only one selection from this list: ["english", "thai", "mandarin", "cantonese"] \n'
-#         'Do not respond with anything but the most logical selection from that list with no explanations. Format the '
-#         'language name exactly as I listed. '
-#     )
-#     lang_convo = [{'role': 'system', 'content': sys_msg},
-#                       {'role': 'user', 'content': prompt}]
-
-#     convo = [{'role': 'user', 'content': prompt}]
-#     chat_completion = groq_client.chat.completions.create(
-#         messages=function_convo, model='llama3-70b-8192')
-#     response = chat_completion.choices[0].message
-
-#     return response.content
 
 
 while True:
