@@ -34,7 +34,7 @@ def select_language():
             print("Please enter a valid number.")
 
 
-print("Press Ctrl+C to exit the program.")
+print("Press Ctrl+C at any time to exit the program.")
 
 # Select language
 language = select_language()
@@ -43,25 +43,26 @@ print(
 
 while True:
     try:
+        input("Press Enter to start listening...")
+
         with sr.Microphone() as mic:
             print("Adjusting for ambient noise. Please wait...")
             recognizer.adjust_for_ambient_noise(mic, duration=1)
             print("Listening... Speak now!")
-            audio = recognizer.listen(mic, timeout=5, phrase_time_limit=5)
+            audio = recognizer.listen(
+                mic, timeout=None, phrase_time_limit=None)
 
-            print("Recognizing...")
-            text = recognizer.recognize_google(audio, language=language)
-            text = text.lower()
+        print("Processing...")
+        text = recognizer.recognize_google(audio, language=language)
+        text = text.lower()
 
-            print(f"Recognized: {text}")
+        print(f"Recognized: {text}")
 
     except sr.UnknownValueError:
         print("Speech Recognition could not understand the audio")
     except sr.RequestError as e:
         print(
             f"Could not request results from Speech Recognition service; {e}")
-    except sr.WaitTimeoutError:
-        print("Listening timed out. No speech detected.")
     except KeyboardInterrupt:
         print("\nExiting the program.")
         sys.exit(0)

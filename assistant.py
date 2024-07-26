@@ -1,7 +1,6 @@
 from openai import AzureOpenAI
 import azure.cognitiveservices.speech as speechsdk
 import speech_recognition as sr
-import pyttsx3
 import os
 from dotenv import load_dotenv
 
@@ -19,6 +18,13 @@ LANGUAGE_VOICE_MAPPING = {
     'thai': 'th-TH-PremwadeeNeural',
     'mandarin': 'zh-CN-XiaoxiaoNeural',
     'cantonese': 'yue-CN-XiaoMinNeural',
+}
+
+LANGUAGE_CODE_MAPPING = {
+    'english': 'en-US',
+    'thai': 'th-TH',
+    'mandarin': 'zh-CN',
+    'cantonese': 'yue-CN',
 }
 
 current_language = 'english'  # Default language
@@ -89,32 +95,78 @@ def speak(text, language):
         speech_config=speech_config)
     try:
         result = speech_synthesizer.speak_text_async(text).get()
-        if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-            print("Speech synthesized for text [{}]".format(text))
-        elif result.reason == speechsdk.ResultReason.Canceled:
-            cancellation_details = result.cancellation_details
-            print("Speech synthesis canceled: {}".format(
-                cancellation_details.reason))
-            if cancellation_details.reason == speechsdk.CancellationReason.Error:
-                print("Error details: {}".format(
-                    cancellation_details.error_details))
+        # if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+        #     print("Speech synthesized for text [{}]".format(text))
+        # elif result.reason == speechsdk.ResultReason.Canceled:
+        #     cancellation_details = result.cancellation_details
+        #     print("Speech synthesis canceled: {}".format(
+        #         cancellation_details.reason))
+        #     if cancellation_details.reason == speechsdk.CancellationReason.Error:
+        #         print("Error details: {}".format(
+        #             cancellation_details.error_details))
     except Exception as e:
         print(f"An error occurred during speech synthesis: {str(e)}")
 
 
+def get_voice_input():
+    global current_language
+    with sr.Microphone() as source:
+        print("Adjusting for ambient noise. Please wait...")
+        recognizer.adjust_for_ambient_noise(source, duration=1)
+        print(f"Listening... (Current language: {current_language})")
+        audio = recognizer.listen(source, timeout=None, phrase_time_limit=None)
+
+    try:
+        text = recognizer.recognize_google(
+            audio, language=LANGUAGE_CODE_MAPPING.get(current_language, 'en-US'))
+        print(f"You said: {text}")
+        return text
+    except sr.UnknownValueError:
+        print("Sorry, I couldn't understand that.")
+        return None
+    except sr.RequestError as e:
+        print(
+            f"Could not request results from Speech Recognition service; {e}")
+        return None
+
+
+def change_language(new_language):
+    global current_language
+    if new_language in LANGUAGE_VOICE_MAPPING:
+        current_language = new_language
+        language_instruction = f"From now on, please respond in {new_language}. This is a language change instruction."
+        convo.append({'role': 'system', 'content': language_instruction})
+        return f"Language changed to {current_language}. The AI will now respond in {current_language}."
+    else:
+        return f"Sorry, {new_language} is not supported. Please try another language."
+
+
+print("Welcome to the AI Language Tutor!")
+print("You can type 'voice' to switch to voice input mode.")
+print("To change the language, type or say 'change language to [language]'.")
+
 while True:
-    prompt = input('USER: ')
+    print("\nChoose input method:")
+    print("1. Type your message")
+    print("2. Use voice input")
+    choice = input("Enter your choice (1 or 2): ")
+
+    if choice == '1':
+        prompt = input('USER: ')
+    elif choice == '2':
+        prompt = get_voice_input()
+        if prompt is None:
+            continue
+    else:
+        print("Invalid choice. Please enter 1 or 2.")
+        continue
 
     # Check if the user wants to change the language
     if prompt.lower().startswith('change language to '):
         new_language = prompt[19:].strip().lower()
-        if new_language in LANGUAGE_VOICE_MAPPING:
-            current_language = new_language
-            print(f"Language changed to {current_language}")
-        else:
-            print(
-                f"Sorry, {new_language} is not supported. Please try another language.")
-            continue
+        response = change_language(new_language)
+        print(response)
+        continue
 
     response = get_response(prompt)
     if response:
